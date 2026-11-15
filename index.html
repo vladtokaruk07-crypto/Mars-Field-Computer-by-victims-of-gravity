@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mars Field Computer — onboard computer for a Mars expedition</title>
+<meta name="description" content="Interactive onboard computer for planning a Mars expedition: location map, site passport, gear calculator and emergency protocols.">
+<style>
+:root{
+  --regolith:#1b0f0b;
+  --regolith-2:#26150f;
+  --regolith-3:#341d14;
+  --dust:#e0a870;
+  --rust:#c4521f;
+  --sunset:#8cc3e6;
+  --bone:#f3e7d5;
+  --bone-dim:#b9a58f;
+  --alarm:#ff5d3d;
+  --line:rgba(243,231,213,.14);
+  --display:Bahnschrift,"DIN Alternate","Arial Narrow","Roboto Condensed","Helvetica Neue",Arial,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{margin:0;background:var(--regolith);color:var(--bone);font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--display);font-weight:700;font-stretch:condensed;letter-spacing:.005em;line-height:1.02;margin:0}
+p{margin:0}
+a{color:var(--sunset)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--sunset);outline-offset:3px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+section{padding:96px 0;border-top:1px solid var(--line)}
+.sec-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:32px;align-items:end;margin-bottom:40px}
+.sec-head h2{font-size:clamp(2.4rem,5.5vw,4.2rem)}
+.sec-head p{color:var(--bone-dim);max-width:60ch}
+@media(max-width:800px){.sec-head{grid-template-columns:1fr;gap:14px}section{padding:64px 0}}
+
+
+.topbar{position:sticky;top:0;z-index:50;background:rgba(27,15,11,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;gap:20px;height:56px}
+.brand{font-family:var(--display);font-weight:700;font-size:1.15rem;letter-spacing:.02em;text-decoration:none;color:var(--bone);white-space:nowrap}
+.brand b{color:var(--rust)}
+.topbar nav{display:flex;gap:4px;margin-left:auto;overflow-x:auto}
+.topbar nav a{color:var(--bone-dim);text-decoration:none;padding:8px 12px;border-radius:6px;font-size:.92rem;white-space:nowrap}
+.topbar nav a:hover{color:var(--bone);background:var(--regolith-3)}
+.clocks{display:flex;gap:6px 20px;flex-shrink:0}
+.clock{font-size:.82rem;color:var(--bone-dim);white-space:nowrap}
+.clock.mars b{color:var(--rust)}
+.clock b{color:var(--dust);font-weight:600}
+@media(max-width:1100px){.clock.earth{display:none}}
+
+
+.hero{position:relative;padding:0;border-top:0;overflow:hidden;
+  background:
+   radial-gradient(circle at 78% 112%,rgba(140,195,230,.55) 0,rgba(140,195,230,.14) 14%,transparent 34%),
+   linear-gradient(180deg,#1b0f0b 0%,#3a1f13 52%,#8a4a26 88%,#c47a3f 100%)}
+.hero-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.hero-bg{background:url("https://commons.wikimedia.org/wiki/Special:FilePath/Mars_Valles_Marineris_EDIT.jpg?width=1920") center/cover no-repeat}
+.hero-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,15,11,.8),rgba(27,15,11,.4) 45%,rgba(27,15,11,.92))}
+.clock b{font-variant-numeric:tabular-nums}
+.sev{display:inline-block;font-size:.78rem;padding:2px 10px;border-radius:99px;border:1px solid var(--alarm);color:var(--alarm);margin:0 0 8px}
+.rule{background:var(--regolith-2);border:1px solid var(--line);border-left:4px solid var(--alarm);border-radius:var(--r);padding:12px 16px;margin-bottom:18px;font-family:var(--display);font-stretch:condensed;font-size:1.15rem;letter-spacing:.03em}
+.rule small{display:block;font-family:var(--body);font-size:.85rem;color:var(--bone-dim);letter-spacing:0}
+.pbar{display:flex;align-items:center;gap:14px;margin:0 0 14px;flex-wrap:wrap}
+.pbar .bar{flex:1;min-width:140px;height:10px;border-radius:99px;background:var(--regolith);border:1px solid var(--line);overflow:hidden}
+.pbar .bar i{display:block;height:100%;width:0;background:var(--sunset);transition:width .25s}
+.pbar .cta{margin:0;padding:6px 12px}
+.stp-t{display:block;margin-top:6px;font-size:.8rem;color:var(--dust)}
+.alert .el{margin-top:10px;color:var(--bone-dim)}
+.hero .wrap{padding-top:88px;padding-bottom:0;position:relative;z-index:2}
+.hero h1{font-size:clamp(3.4rem,11vw,9.2rem);text-transform:none;max-width:12ch}
+.hero .lead{font-size:clamp(1.05rem,1.6vw,1.3rem);max-width:54ch;margin-top:24px;color:var(--bone)}
+.boot{margin-top:32px;display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.9rem;color:var(--bone-dim)}
+.boot span{opacity:.25;transition:opacity .4s}
+.boot span.on{opacity:1}
+.boot span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sunset);margin-right:8px;box-shadow:0 0 8px var(--sunset)}
+.ridge{display:block;width:100%;height:auto;margin-top:56px;position:relative;z-index:1}
+.modules{position:relative;z-index:3;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:-4px;padding-bottom:56px}
+.mod{display:flex;flex-direction:column;gap:8px;text-decoration:none;color:var(--bone);background:rgba(27,15,11,.82);border:1px solid var(--line);border-radius:var(--r);padding:20px;transition:border-color .2s,transform .2s;min-height:150px}
+.mod:hover{border-color:var(--dust);transform:translateY(-3px)}
+.mod h3{font-size:1.6rem}
+.mod p{font-size:.92rem;color:var(--bone-dim)}
+.mod .tag{margin-top:auto;font-size:.8rem;color:var(--dust)}
+@media(max-width:900px){.modules{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.modules{grid-template-columns:1fr}.hero .wrap{padding-top:56px}}
+
+
+.mapframe{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#2a1710;touch-action:manipulation}
+.mapframe svg{display:block;width:100%;height:auto}
+.hot{position:absolute;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;border:0;background:transparent;padding:0}
+.hot i{position:absolute;inset:14px;border-radius:50%;background:var(--sunset);box-shadow:0 0 0 3px rgba(27,15,11,.7)}
+.hot::before,.hot::after{content:"";position:absolute;inset:6px;border-radius:50%;border:2px solid var(--sunset);opacity:0;animation:ping 2.6s infinite}
+.hot::after{animation-delay:1.3s}
+.hot.sel i{background:var(--bone)}
+.hot .lbl{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:2px;white-space:nowrap;font-family:var(--display);font-weight:700;font-stretch:condensed;font-size:1.05rem;color:var(--bone);text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
+@keyframes ping{0%{transform:scale(.4);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+.readout{position:absolute;left:12px;bottom:10px;font-size:.82rem;background:rgba(27,15,11,.8);padding:4px 10px;border-radius:6px;color:var(--bone-dim)}
+.mapnote{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin-top:14px;color:var(--bone-dim);font-size:.88rem}
+.picks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px}
+.pick{text-align:left;background:var(--regolith-2);border:1px solid var(--line);border-radius:var(--r);padding:18px;transition:border-color .2s}
+.pick:hover,.pick[aria-pressed="true"]{border-color:var(--sunset)}
+.pick{overflow:hidden}
+.pk-ph{display:block;margin:-18px -18px 14px;aspect-ratio:16/9;background:var(--regolith-3);overflow:hidden}
+.pk-ph img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .4s}
+.pick:hover .pk-ph img,.pick[aria-pressed="true"] .pk-ph img{transform:scale(1.05)}
+.pick h3{font-size:1.5rem;margin-bottom:6px}
+.pick p{font-size:.92rem;color:var(--bone-dim)}
+@media(max-width:800px){.picks{grid-template-columns:1fr}.hot .lbl{font-size:.85rem}}
+
+
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:48px 24px;text-align:center;color:var(--bone-dim)}
+.empty b{display:block;font-family:var(--display);font-size:1.6rem;color:var(--bone);margin-bottom:6px}
+.passport{display:none;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px}
+.passport.show{display:grid;animation:rise .35s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media(max-width:900px){.passport{grid-template-columns:1fr}}
+.pp-title h3{font-size:clamp(2.2rem,5vw,3.6rem)}
+.pp-title .ua{color:var(--dust);font-size:1.1rem;margin-top:6px}
+.pp-title .coord{color:var(--bone-dim);font-size:.9rem;margin-top:4px}
+.pp-why{margin:18px 0 22px;max-width:62ch}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fact{background:var(--regolith-2);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.fact .k{font-size:.88rem;color:var(--bone-dim)}
+.fact .v{font-family:var(--display);font-weight:700;font-stretch:condensed;font-size:2rem;line-height:1.1;margin:4px 0 6px}
+.fact .n{font-size:.86rem;color:var(--bone-dim)}
+.fact.threat{grid-column:1/-1;border-color:rgba(255,93,61,.45)}
+.fact.threat .v{color:var(--alarm)}
+.badge{display:inline-block;font-size:.74rem;padding:1px 8px;border-radius:99px;margin-left:8px;vertical-align:middle;border:1px solid}
+.b-m{color:var(--sunset);border-color:var(--sunset)}
+.b-r{color:var(--dust);border-color:var(--dust)}
+.b-e{color:var(--bone-dim);border-color:var(--bone-dim)}
+.pp-side{background:var(--regolith-2);border:1px solid var(--line);border-radius:var(--r);padding:20px;align-self:start}
+.pp-side h4{margin:0 0 4px;font-family:var(--display);font-size:1.3rem;font-stretch:condensed}
+.pp-side .sub{font-size:.86rem;color:var(--bone-dim);margin-bottom:6px}
+.radar{width:100%;height:auto;display:block}
+.cta{display:inline-block;margin-top:14px;background:var(--rust);color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:600}
+.cta:hover{background:#d96228}
+.cta.ghost{background:transparent;border:1px solid var(--line);color:var(--bone)}
+.cta.ghost:hover{border-color:var(--dust)}
+@media(max-width:520px){.facts{grid-template-columns:1fr}}
+
+
+.calc{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:28px;align-items:start}
+@media(max-width:960px){.calc{grid-template-columns:1fr}}
+.panel{background:var(--regolith-2);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+.panel h3{font-size:1.5rem;margin-bottom:14px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:22px}
+.seg button{background:var(--regolith);border:1px solid var(--line);border-radius:8px;padding:10px 6px;font-size:.92rem}
+.seg button[aria-checked="true"]{background:var(--rust);border-color:var(--rust);color:#fff}
+.ctl{margin-bottom:20px}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:.95rem}
+.ctl output{font-family:var(--display);font-size:1.5rem;color:var(--dust);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--rust);height:28px}
+.assume summary{cursor:pointer;color:var(--bone-dim);font-size:.88rem}
+.assume ul{margin:10px 0 0;padding-left:18px;color:var(--bone-dim);font-size:.84rem}
+.res{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+@media(max-width:620px){.res{grid-template-columns:1fr 1fr}}
+.tile{background:var(--regolith);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.tile .k{font-size:.84rem;color:var(--bone-dim)}
+.tile .v{font-family:var(--display);font-weight:700;font-stretch:condensed;font-size:2.2rem;line-height:1.05;margin-top:2px;font-variant-numeric:tabular-nums}
+.tile .u{font-size:.82rem;color:var(--bone-dim)}
+.dose{margin-bottom:22px}
+.dose .bar{height:12px;border-radius:99px;background:var(--regolith);border:1px solid var(--line);overflow:hidden;margin:8px 0}
+.dose .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--sunset),var(--dust),var(--alarm));transition:width .3s}
+.dose p{font-size:.86rem;color:var(--bone-dim)}
+.prog{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.prog .bar{flex:1;min-width:160px;height:12px;border-radius:99px;background:var(--regolith);border:1px solid var(--line);overflow:hidden}
+.prog .bar i{display:block;height:100%;width:0;background:var(--sunset);transition:width .25s}
+.status{font-family:var(--display);font-weight:700;font-size:1.3rem;padding:2px 12px;border-radius:6px;background:var(--regolith);border:1px solid var(--line)}
+.status.go{color:#0d1b12;background:var(--sunset);border-color:var(--sunset)}
+.grp{margin-bottom:16px}
+.grp h4{margin:0 0 6px;font-family:var(--display);font-stretch:condensed;font-size:1.2rem;color:var(--dust)}
+.item{display:flex;gap:12px;align-items:flex-start;padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}
+.item:hover{background:rgba(243,231,213,.04)}
+.item input{width:22px;height:22px;margin-top:1px;accent-color:var(--sunset);flex:none}
+.item span{flex:1}
+.item small{display:block;color:var(--bone-dim);font-size:.84rem}
+.item input:checked~span{color:var(--bone-dim);text-decoration:line-through;text-decoration-color:rgba(243,231,213,.35)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+
+
+.proto{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px}
+@media(max-width:860px){.proto{grid-template-columns:1fr}}
+.tabs{display:flex;flex-direction:column;gap:8px}
+@media(max-width:860px){.tabs{flex-direction:row;overflow-x:auto}.tabs button{white-space:nowrap}}
+.tabs button{text-align:left;background:var(--regolith-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-family:var(--display);font-stretch:condensed;font-weight:700;font-size:1.25rem}
+.tabs button[aria-selected="true"]{background:var(--alarm);border-color:var(--alarm);color:#1b0f0b}
+.p-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:18px}
+.p-head h3{font-size:clamp(2rem,4vw,3rem)}
+.p-head p{color:var(--bone-dim);max-width:56ch;margin-top:6px}
+.steps{list-style:none;margin:0;padding:0;counter-reset:s;display:grid;gap:10px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:64px 1fr;gap:16px;background:var(--regolith-2);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;cursor:pointer;align-items:center}
+.steps li::before{content:counter(s);font-family:var(--display);font-weight:700;font-size:3rem;line-height:1;color:var(--alarm);text-align:center}
+.steps li.done{opacity:.5}
+.steps li.done::before{color:var(--sunset)}
+.steps b{display:block;font-size:1.12rem}
+.steps span{color:var(--bone-dim);font-size:.95rem}
+.donts{margin-top:18px;border:1px solid rgba(255,93,61,.45);border-radius:var(--r);padding:16px 20px}
+.donts h4{margin:0 0 6px;font-family:var(--display);font-stretch:condensed;font-size:1.2rem;color:var(--alarm)}
+.donts ul{margin:0;padding-left:20px;color:var(--bone-dim)}
+.overlay{position:fixed;inset:0;z-index:100;background:#0a0503;display:none;align-items:center;justify-content:center;padding:24px}
+.overlay.open{display:flex}
+.alert{max-width:760px;width:100%;text-align:center}
+.alert .ttl{color:var(--alarm);font-family:var(--display);font-size:1.4rem;font-weight:700}
+.alert .big{font-family:var(--display);font-weight:700;font-size:clamp(7rem,28vw,15rem);line-height:.9;color:var(--alarm)}
+.alert h3{font-size:clamp(2rem,6vw,3.4rem);margin:8px 0 12px}
+.alert p{font-size:1.2rem;color:var(--bone);min-height:3.6em}
+.alert .nav{display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap}
+.alert .dots{margin-top:18px;color:var(--bone-dim)}
+
+
+#realmap{opacity:0;transition:opacity .9s ease;filter:contrast(1.1) saturate(1.18)}
+#realmap.on{opacity:1}
+.mapframe::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 90px rgba(20,8,4,.55)}
+.hot,.readout{z-index:2}
+#geolabels text{paint-order:stroke;stroke:#1b0f0b;stroke-width:3.5px;stroke-linejoin:round;stroke-opacity:.8}
+.mapnote a{color:var(--sunset)}
+
+
+.pp-photo{margin:20px 0 0}
+.pp-photo .ph{position:relative;aspect-ratio:16/9;background:var(--regolith-3);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.pp-photo img{display:block;width:100%;height:100%;object-fit:cover}
+.pp-photo figcaption{margin-top:8px;font-size:.88rem;color:var(--bone-dim)}
+.pp-photo figcaption small{display:block;margin-top:2px;font-size:.8rem;opacity:.85}
+.pp-photo figcaption a{color:var(--sunset)}
+.ph.fail img{visibility:hidden}
+.ph.fail::after{content:"Photo failed to load. An internet connection is required.";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;color:var(--bone-dim);font-size:.9rem}
+
+
+footer{border-top:1px solid var(--line);padding:56px 0 72px;color:var(--bone-dim);font-size:.9rem}
+footer .cols{display:grid;grid-template-columns:1.2fr 1fr;gap:32px}
+footer h4{margin:0 0 8px;font-family:var(--display);font-stretch:condensed;font-size:1.3rem;color:var(--bone)}
+footer ul{margin:0;padding-left:18px}
+footer li{margin-bottom:4px}
+@media(max-width:800px){footer .cols{grid-template-columns:1fr}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}.boot span{opacity:1}}
+@media print{.topbar,.hero,section:not(#calc),footer,.tools,.seg,.ctl,.assume{display:none!important}body{background:#fff;color:#000}.panel,.tile,.item{background:#fff;color:#000;border-color:#999}.item small,.tile .k,.tile .u{color:#333}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#top">MARS<b>/</b>FIELD COMPUTER</a>
+    <div class="clocks">
+      <div class="clock earth num" aria-label="Earth time (UTC)">Earth UTC <b id="edate">----.--.--</b> &nbsp; <b id="etime">--:--:--</b></div>
+      <div class="clock mars num" aria-label="Coordinated Mars Time" title="MTC — Coordinated Mars Time: mean solar time at the Martian prime meridian. 1 sol = 24 Mars hours.">Mars MTC <b id="mtime">--:--:--</b></div>
+    </div>
+    <nav aria-label="Modules">
+      <a href="#map">1 Map</a><a href="#passport">2 Passport</a><a href="#calc">3 Expedition</a><a href="#protocol">4 Emergency</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+<section class="hero" aria-labelledby="h-title">
+  <div class="hero-bg" id="heroBg" aria-hidden="true"></div>
+  <div class="wrap">
+    <h1 id="h-title">Expedition Onboard Computer</h1>
+    <p class="lead">Pick a place on Mars, find out what makes it dangerous, calculate oxygen, water and batteries for a suited EVA — and learn what to do when something goes wrong.</p>
+    <div class="boot" id="boot" aria-hidden="true">
+      <span>Onboard system: ready</span><span>Location data: loaded</span><span>Calculator: ready</span><span>Protocols: online</span>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="modules" aria-label="Onboard computer modules">
+      <a class="mod" href="#map"><h3>Map</h3><p>Seven places: ancient lakes, canyons, volcanoes, ice plains and rover landing sites.</p><span class="tag">Module 1</span></a>
+      <a class="mod" href="#passport"><h3>Location passport</h3><p>A photo of the place, temperature, radiation, ice and the main threat for each of the seven places.</p><span class="tag">Module 2</span></a>
+      <a class="mod" href="#calc"><h3>Expedition</h3><p>Oxygen, water, battery charges and a checklist you can tick off.</p><span class="tag">Module 3</span></a>
+      <a class="mod" href="#protocol"><h3>Emergency</h3><p>Depressurization, comms loss, storm: clear steps 1-2-3.</p><span class="tag">Module 4</span></a>
+    </nav>
+  </div>
+</section>
+
+<section id="map" aria-labelledby="h-map">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="h-map">Where are we going?</h2>
+      <p>A map of Mars in equirectangular projection built from real surface imagery: you can see volcanoes, canyons and craters. Click a glowing dot to open the place's passport. The dots sit at real coordinates.</p>
+    </div>
+    <div class="mapframe" id="mapframe">
+      <svg id="marsmap" viewBox="0 0 1440 720" role="img" aria-label="Map of Mars with seven locations">
+        <defs>
+          <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#7a3a1f"/><stop offset=".45" stop-color="#a5502a"/><stop offset="1" stop-color="#8a4325"/>
+          </linearGradient>
+          <filter id="grain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.006 0.011" numOctaves="5" seed="11"/>
+            <feColorMatrix values="0 0 0 0 0.12  0 0 0 0 0.05  0 0 0 0 0.03  0 0 0 1.7 -0.55"/>
+          </filter>
+          <filter id="grain2" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="3"/>
+            <feColorMatrix values="0 0 0 0 0.95  0 0 0 0 0.7  0 0 0 0 0.45  0 0 0 0.9 -0.4"/>
+          </filter>
+          <filter id="hill" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.0055 0.011" numOctaves="6" seed="7" result="n"/>
+            <feDiffuseLighting in="n" lighting-color="#ffe2c0" surfaceScale="7" diffuseConstant="1.05">
+              <feDistantLight azimuth="235" elevation="38"/>
+            </feDiffuseLighting>
+          </filter>
+          <filter id="soft"><feGaussianBlur stdDeviation="14"/></filter>
+          <filter id="soft2"><feGaussianBlur stdDeviation="3"/></filter>
+          <radialGradient id="mons"><stop offset="0" stop-color="#f0c9a0" stop-opacity=".95"/><stop offset=".55" stop-color="#d89a68" stop-opacity=".7"/><stop offset="1" stop-color="#d89a68" stop-opacity="0"/></radialGradient>
+          <linearGradient id="capN" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+          <linearGradient id="capS" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+        </defs>
+        <g id="fallback">
+          <rect width="1440" height="720" fill="url(#base)"/>
+          <rect width="1440" height="720" filter="url(#grain)"/>
+          <path d="M0 40 H1440 V230 C1250 250 1150 215 1000 238 C860 262 760 222 640 240 C500 262 380 232 250 246 C150 256 70 238 0 244Z" fill="#4a2214" opacity=".55" filter="url(#soft)"/>
+          <ellipse cx="330" cy="330" rx="200" ry="120" fill="#e0a06c" opacity=".38" filter="url(#soft)"/>
+          <ellipse cx="1000" cy="528" rx="85" ry="62" fill="#e9b887" opacity=".55" filter="url(#soft2)"/>
+          <ellipse cx="1000" cy="528" rx="62" ry="44" fill="#f2cfa3" opacity=".45" filter="url(#soft2)"/>
+          <ellipse cx="1190" cy="176" rx="120" ry="46" fill="#3a1a0f" opacity=".4" filter="url(#soft)"/>
+          <ellipse cx="996" cy="322" rx="42" ry="56" fill="#2c130b" opacity=".6" filter="url(#soft)"/>
+          <rect width="1440" height="720" filter="url(#grain2)" opacity=".28"/>
+          <rect width="1440" height="720" filter="url(#hill)" style="mix-blend-mode:soft-light" opacity=".75"/>
+          <g id="craters"></g>
+          <rect width="1440" height="70" fill="url(#capN)" opacity=".85"/>
+          <rect y="648" width="1440" height="72" fill="url(#capS)" opacity=".85"/>
+          <g>
+            <circle cx="288" cy="318" r="30" fill="url(#mons)"/>
+            <circle cx="258" cy="352" r="30" fill="url(#mons)"/>
+            <circle cx="232" cy="386" r="30" fill="url(#mons)"/>
+            <circle cx="185" cy="285" r="74" fill="url(#mons)"/>
+            <circle cx="185" cy="285" r="40" fill="none" stroke="#f6dcc0" stroke-opacity=".55" stroke-width="1.5"/>
+          </g>
+          <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M338 392 C395 388 430 410 480 414 C520 418 560 410 610 432" stroke="#1c0b06" stroke-width="22" opacity=".9" filter="url(#soft2)"/>
+            <path d="M338 392 C395 388 430 410 480 414 C520 418 560 410 610 432" stroke="#5a2a17" stroke-width="12"/>
+          </g>
+          <circle cx="1030" cy="286" r="9" fill="#2a1007" stroke="#f0c9a0" stroke-width="1.2" stroke-opacity=".7"/>
+        </g>
+        <image id="realmap" x="0" y="0" width="1440" height="720" preserveAspectRatio="none"/>
+        <g stroke="#f3e7d5" stroke-opacity=".22" stroke-width="1" id="grid"></g>
+      </svg>
+      <div id="hotspots"></div>
+      <div class="readout num" id="readout" aria-hidden="true">Hover over the map</div>
+    </div>
+    <div class="mapnote"><span>The equator and prime meridian are on the grid; grid spacing is 30°.</span></div>
+    <div class="picks" id="picks"></div>
+  </div>
+</section>
+
+<section id="passport" aria-labelledby="h-pass">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="h-pass">Location passport</h2>
+      <p>Each figure carries a tag: measured, taken as a reference from another place, or an estimate. This shows what can be trusted and what still needs checking.</p>
+    </div>
+    <div class="empty" id="pp-empty"><b>No location selected yet</b>Choose a point on the map above to see its passport.</div>
+    <div class="passport" id="pp" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="calc" aria-labelledby="h-calc">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="h-calc">Expedition generator</h2>
+      <p>Choose a place, duration and crew — the computer will calculate resources and build a checklist. Tick items off when the gear is in the airlock: the state is saved in your browser.</p>
+    </div>
+    <div class="calc">
+      <div class="panel">
+        <h3>Mission parameters</h3>
+        <div class="seg" role="radiogroup" aria-label="Location" id="seg"></div>
+        <div class="ctl"><label for="days">Mission duration <output id="o-days" class="num">3 sols</output></label><input id="days" type="range" min="1" max="30" value="3"></div>
+        <div class="ctl"><label for="crew">Number of astronauts <output id="o-crew" class="num">2</output></label><input id="crew" type="range" min="1" max="4" value="2"></div>
+        <div class="ctl"><label for="eva">EVA, Mars hours per sol <output id="o-eva" class="num">4 Mars hr</output></label><input id="eva" type="range" min="2" max="8" value="4"></div>
+        <details class="assume">
+          <summary>Model assumptions</summary>
+          <ul>
+            <li>Time is Martian: 1 sol = 24 Martian hours = 24 h 39 min 35 s on an Earth clock, so a Martian hour ≈ 61.6 min. All rates below are per sol and per Mars hour.</li>
+            <li>Oxygen in the module: ≈ 24.7 L per Mars hour per person (≈ 0.85 kg/sol); during an EVA ≈ 46.2 L per Mars hour. +30% reserve.</li>
+            <li>Water: 3 L for drinking and food and 1 L for hygiene per person per sol, +0.5 L per Mars hour for suit cooling. +20% reserve.</li>
+            <li>One suit battery charge ≈ 8 Mars hours of EVA. Rough terrain and cold increase consumption.</li>
+            <li>Radiation: dose per sol × number of sols. Reference measured in Gale Crater: 0.67 mSv per Earth day ≈ 0.69 mSv/sol. For other sites it is an estimate.</li>
+            <li>This is an educational model for a hackathon, not instructions for a real flight.</li>
+          </ul>
+        </details>
+      </div>
+      <div>
+        <div class="res" id="res"></div>
+        <div class="dose panel" id="dose"></div>
+        <div class="panel">
+          <h3>EVA checklist</h3>
+          <div class="prog"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="pbar"><i id="pfill"></i></div><span class="num" id="ptxt">0 of 0</span><span class="status" id="pstat">STANDBY</span></div>
+          <div id="list"></div>
+          <div class="tools">
+            <button class="cta ghost" id="copy" type="button">Copy list</button>
+            <button class="cta ghost" id="print" type="button">Print</button>
+            <button class="cta ghost" id="reset" type="button">Clear all ticks</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="protocol" aria-labelledby="h-pro">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="h-pro">Emergency handbook</h2>
+      <p>Eight scenarios: short and step by step. Tap a step when you've done it. Alarm mode shows one step at a time full screen — readable in a helmet when your hands are busy.</p>
+    </div>
+    <div class="proto">
+      <div class="tabs" role="tablist" aria-label="Type of emergency" id="tabs"></div>
+      <div id="pbody" role="tabpanel"></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="overlay" id="ov" role="dialog" aria-modal="true" aria-labelledby="ov-t">
+  <div class="alert">
+    <div class="ttl" id="ov-t"></div>
+    <div class="big num" id="ov-n">1</div>
+    <h3 id="ov-h"></h3>
+    <p id="ov-p"></p>
+    <div class="nav">
+      <button class="cta ghost" id="ov-prev" type="button">Back</button>
+      <button class="cta" id="ov-next" type="button">Done, next</button>
+      <button class="cta ghost" id="ov-x" type="button">Close (Esc)</button>
+    </div>
+    <div class="dots num" id="ov-d"></div><div class="el num" id="ov-el">00:00</div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(s,r){return (r||document).querySelector(s)};
+var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})};
+var ls={get:function(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+
+
+var LOC={
+ jezero:{
+  name:"Jezero Crater",coord:"18.44° N, 77.45° E",lat:18.44,lon:77.45,
+  photo:{f:"PIA19303-Mars2020Mission-PossibleLanding_Site-JezeroCrater-20150304.jpg",alt:"Jezero Crater on Mars, seen from orbit",cap:"Jezero Crater from orbit."},
+  pick:"An ancient lake with a river delta. A rover is working here.",
+  why:"A river once flowed into this crater and built a delta — an ideal place to search for traces of ancient life. The rover collects rock samples here for a future return to Earth.",
+  facts:[
+   {k:"Average temperature",v:"≈ −55 °C",n:"Air temperature has dropped as low as −83 °C.",kind:"e"},
+   {k:"Atmospheric pressure",v:"≈ 718 Pa",n:"Measured on site. That is less than 1% of Earth's.",kind:"m"},
+   {k:"Radiation",v:"≈ 0.69 mSv/sol",n:"Reference from Gale Crater: 0.67 mSv per Earth day. Jezero should be similar.",kind:"r"},
+   {k:"Subsurface ice",v:"Low probability",n:"Water was here in the past: traces are preserved in the delta's minerals, not as ice underfoot.",kind:"e"}
+  ],
+  threat:{v:"Dust storms",n:"Dust is abrasive and clogs suit joints. Wind gusts of up to ≈ 10 m/s have been recorded. Delta boulders make walking harder."},
+  radar:[5,6,4,6,3],
+  mods:{o2:1.0,water:1.0,bat:1.0,rad:0.69},
+  extra:[
+   {id:"jz1",t:"Rock sample containers",d:"The delta is the main science target"},
+   {id:"jz2",t:"Dust covers for joints and helmets",d:"Protection from abrasive dust"},
+   {id:"jz3",t:"Weather beacon station",d:"Dust storm forecasting"}
+  ]},
+ valles:{
+  name:"Valles Marineris",coord:"13.9° S, 59.2° W",lat:-13.9,lon:-59.2,
+  photo:{f:"PIA00006_Oblique_View_with_Altimetry_of_Valles_Marineris.jpg",alt:"Oblique view of central Valles Marineris from orbit",cap:"Central Valles Marineris (Ophir and Candor chasmata), oblique view looking east."},
+  pick:"The largest canyon system in the Solar System: over 4,000 km long.",
+  why:"The canyon stretches about a fifth of the way around Mars's equator and drops about 7 km deep. Its walls expose layers of rock through time, and the floor has higher pressure than the plains, so scientists look for water ice there.",
+  facts:[
+   {k:"Average temperature",v:"≈ −50 °C",n:"Lower than the plains, so a bit warmer. Approximate value.",kind:"e"},
+   {k:"Atmospheric pressure",v:"≈ 1000 Pa on the floor",n:"Depth \"compresses\" the atmosphere: pressure is higher than on the plains.",kind:"e"},
+   {k:"Radiation",v:"≈ 0.62 mSv/sol",n:"More air overhead, and the walls block part of the sky.",kind:"e"},
+   {k:"Subsurface ice",v:"High probability",n:"Orbital data suggest up to ≈ 40% water in the near-surface layer in some areas. Not yet confirmed on site.",kind:"e"}
+  ],
+  threat:{v:"Landslides and cliffs",n:"The walls are kilometers of sheer rock, and old landslides run up to 100 km long. The canyon shadows radio links, and landing on the narrow floor is hard."},
+  radar:[4,5,9,3,8],
+  mods:{o2:1.15,water:1.0,bat:1.15,rad:0.62},
+  extra:[
+   {id:"vm1",t:"Climbing gear: ropes, belay, anchors",d:"For descending the slopes"},
+   {id:"vm2",t:"Ice sampling drill",d:"The site's main resource target"},
+   {id:"vm3",t:"Comms relay on the canyon rim",d:"Walls block the radio signal"}
+  ]},
+ olympus:{
+  name:"Olympus Mons",coord:"18.65° N, 226.2° E",lat:18.65,lon:226.2,
+  photo:{f:"Olympus_Mons_alt.jpg",alt:"Olympus Mons",cap:"Olympus Mons from orbit."},
+  pick:"The tallest volcano in the Solar System: ≈ 21.9 km high and ≈ 600 km wide.",
+  why:"A shield volcano about three times taller than Everest. The summit caldera is 60 × 80 km, and the flank ends in a scarp up to 8 km high. You can study Martian volcanism here, but the climb is an extreme expedition.",
+  facts:[
+   {k:"Average temperature",v:"≈ −75 °C",n:"Thin air holds heat poorly. Approximate value.",kind:"e"},
+   {k:"Atmospheric pressure",v:"≈ 72 Pa at the summit",n:"About 12% of the average surface pressure on Mars (≈ 600 Pa).",kind:"m"},
+   {k:"Radiation",v:"≈ 0.87 mSv/sol",n:"There is almost no air above the summit to weaken cosmic rays.",kind:"e"},
+   {k:"Subsurface ice",v:"Not confirmed",n:"This is volcanic rock. There is less water here than at the other sites.",kind:"e"}
+  ],
+  threat:{v:"Altitude and thin atmosphere",n:"At the summit a parachute barely slows a vehicle, so landing there is unproven. Add cold and above-average radiation."},
+  radar:[7,8,9,8,10],
+  mods:{o2:1.3,water:1.1,bat:1.4,rad:0.87},
+  extra:[
+   {id:"om1",t:"Extra suit insulation",d:"Cold at altitude is beyond normal"},
+   {id:"om2",t:"Pressurized rover for the climb",d:"A slope hundreds of km long can't be walked"},
+   {id:"om3",t:"Spare oxygen set for the descent",d:"Altitude increases exertion"}
+  ]},
+ gale:{name:"Gale Crater",coord:"5.4° S, 137.8° E",lat:-5.4,lon:137.8,
+  photo:{f:"PIA16239_High-Resolution_Self-Portrait_by_Curiosity_Rover_Arm_Camera.jpg",alt0:["Curiosity_Self-Portrait_at_'Windjana'_Drilling_Site.jpg","Curiosity_Self-Portrait_at_'Rocknest'_Drilling_Site.jpg"],alt:"A rover on the floor of Gale Crater",cap:"A rover on the floor of Gale Crater, near Mount Sharp."},
+  pick:"A 154 km crater with the ≈ 5 km tall Mount Sharp — the best-studied place on Mars.",
+  why:"The crater floor once held a lake. Mount Sharp's layers read like a book about climate change, so this is the benchmark for all other sites. A rover has worked here for years, so there is more data than anywhere else.",
+  facts:[{k:"Average temperature",v:"≈ −60 °C",n:"Up to ≈ 0 °C by day, around −90 °C at night.",kind:"m"},
+   {k:"Atmospheric pressure",v:"≈ 750 Pa",n:"Varies by about a quarter over the year.",kind:"m"},
+   {k:"Radiation",v:"≈ 0.69 mSv/sol",n:"Measured on the surface: 0.67 mSv per Earth day.",kind:"m"},
+   {k:"Subsurface ice",v:"Low probability",n:"Water exists bound in minerals, not as ice.",kind:"e"}],
+  threat:{v:"Steep mountain slopes and sand traps",n:"Dunes and soft sand trap wheels, and Mount Sharp's slopes are steep."},
+  radar:[4,6,5,5,3],mods:{o2:1.0,water:1.0,bat:1.05,rad:0.69},
+  extra:[{id:"gl1",t:"Traction boards for freeing vehicles from sand",d:"Dunes and soft ground"}]},
+ hellas:{name:"Hellas Planitia",coord:"42.4° S, 70.5° E",lat:-42.4,lon:70.5,
+  photo:{f:"Hellas Planitia by the Viking orbiters.jpg",alt:"Hellas Basin on Mars, color image",cap:"Hellas Basin in a color composite of orbital images."},
+  pick:"The deepest basin on Mars: its floor lies about 7 km below the mean level.",
+  why:"The largest impact basin is ≈ 2,300 km across. Because of the depth it has the highest atmospheric pressure on the planet, so it is warmer and seasonal frost is possible. In summer it offers the most comfortable conditions for a suit.",
+  facts:[{k:"Average temperature",v:"≈ −60 °C",n:"Harsh frosts in the south in winter, a bit warmer in summer.",kind:"e"},
+   {k:"Atmospheric pressure",v:"≈ 1200 Pa",n:"The highest on Mars, but still around 1% of Earth's.",kind:"e"},
+   {k:"Radiation",v:"≈ 0.58 mSv/sol",n:"The thickest air column overhead on the planet.",kind:"e"},
+   {k:"Subsurface ice",v:"Medium probability",n:"Seasonal frost is visible in winter; deeper ice is unconfirmed.",kind:"e"}],
+  threat:{v:"Dust storms and winter frosts",n:"The basin collects dust during regional storms, and temperatures drop sharply in winter."},
+  radar:[3,7,3,5,5],mods:{o2:1.05,water:1.0,bat:1.2,rad:0.58},
+  extra:[{id:"hl1",t:"Insulated battery covers",d:"Southern winter frosts"}]},
+ utopia:{name:"Utopia Planitia",coord:"46.7° N, 117.5° E",lat:46.7,lon:117.5,
+  photo:{f:"Mars Viking 21i093.png",alt:"A thin layer of water frost on the surface of Utopia",cap:"Water frost on the surface of Utopia, 1979."},
+  pick:"A northern plain with huge reserves of subsurface ice.",
+  why:"Orbital radar shows thick layers of ice under the soil — the closest thing to a water source that doesn't need deep drilling. Flat terrain makes landing and travel easier.",
+  facts:[{k:"Average temperature",v:"≈ −70 °C",n:"High northern latitude: a long, cold winter.",kind:"e"},
+   {k:"Atmospheric pressure",v:"≈ 800 Pa",n:"Close to the Mars average.",kind:"e"},
+   {k:"Radiation",v:"≈ 0.72 mSv/sol",n:"High latitudes receive slightly more cosmic rays.",kind:"e"},
+   {k:"Subsurface ice",v:"High probability",n:"Radar indicates ice a few meters down. It still needs to be verified by drilling.",kind:"e"}],
+  threat:{v:"Cold and dark winter",n:"Little winter sunlight limits solar power, and the frost drains batteries."},
+  radar:[5,8,2,2,4],mods:{o2:1.05,water:0.85,bat:1.3,rad:0.72},
+  extra:[{id:"ut1",t:"Ice sampling drill and water heater",d:"Ice is the site's main resource"}]},
+ meridiani:{name:"Meridiani Planum",coord:"1.95° S, 354.5° E",lat:-1.95,lon:-5.5,
+  photo:{f:"Opportunity - PIA05152.jpg",alt:"Eagle Crater on Meridiani Planum",cap:"Eagle Crater on Meridiani Planum, a panorama from a rover."},
+  pick:"A flat plain near the equator with iron-rich hematite \"blueberries\".",
+  why:"One of the flattest areas on Mars, and a rover has driven over 45 km here. The low latitude gives plenty of sunlight, so it is the easiest site for a first crew landing.",
+  facts:[{k:"Average temperature",v:"≈ −55 °C",n:"Up to +5 °C by day, around −95 °C at night.",kind:"m"},
+   {k:"Atmospheric pressure",v:"≈ 700 Pa",n:"Typical for plains near the equator.",kind:"m"},
+   {k:"Radiation",v:"≈ 0.66 mSv/sol",n:"Close to the Gale Crater reference.",kind:"r"},
+   {k:"Subsurface ice",v:"Low probability",n:"The equatorial zone is very dry; water was here long ago.",kind:"e"}],
+  threat:{v:"Sand and dust storms",n:"Fine sand settles on solar panels and in suit joints."},
+  radar:[4,4,1,6,2],mods:{o2:1.0,water:1.0,bat:0.95,rad:0.66},
+  extra:[{id:"mp1",t:"Brushes and blowers for solar panels",d:"Dust reduces power generation"}]}
+};
+var ORDER=["jezero","gale","meridiani","valles","olympus","hellas","utopia"];
+var AXES=["Radiation","Cold","Terrain","Water scarcity","Landing, comms"];
+var KIND={m:["measured","b-m"],r:["reference","b-r"],e:["estimate","b-e"]};
+
+
+function tick(){
+  var n=new Date(),p=function(x){return String(x).padStart(2,"0")};
+  $("#edate").textContent=n.getUTCFullYear()+"-"+p(n.getUTCMonth()+1)+"-"+p(n.getUTCDate());
+  $("#etime").textContent=p(n.getUTCHours())+":"+p(n.getUTCMinutes())+":"+p(n.getUTCSeconds());
+
+  var mjdTT=n.getTime()/86400000+40587+69.184/86400;
+  var msd=(mjdTT-51549)/1.0274912517+44796-0.0009626;
+  var sol=Math.floor(msd),sec=Math.floor((msd-sol)*86400);
+  $("#mtime").textContent=p(Math.floor(sec/3600))+":"+p(Math.floor(sec/60)%60)+":"+p(sec%60);
+}
+tick();setInterval(tick,250);
+
+/* ================= BOOT ================= */
+(function(){
+  var spans=document.querySelectorAll("#boot span");
+  var reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  spans.forEach(function(s,i){ if(reduce){s.classList.add("on")}else{setTimeout(function(){s.classList.add("on")},500+i*420)} });
+})();
+
+
+(function(){
+  var g=$("#grid"),ns="http://www.w3.org/2000/svg",h="";
+  for(var lon=-180;lon<=180;lon+=30){var x=(lon+180)*4;h+='<line x1="'+x+'" y1="0" x2="'+x+'" y2="720"/>'}
+  for(var lat=-90;lat<=90;lat+=30){var y=(90-lat)*4;h+='<line x1="0" y1="'+y+'" x2="1440" y2="'+y+'"'+(lat===0?' stroke-opacity=".5"':'')+'/>'}
+  g.innerHTML=h;
+
+  var seed=42;function rnd(){seed=(seed*1664525+1013904223)%4294967296;return seed/4294967296}
+  var c="";
+  for(var i=0;i<170;i++){
+    var x=rnd()*1440,y=70+rnd()*580,r=1.5+Math.pow(rnd(),3)*16;
+    c+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="#2a1208" fill-opacity=".28" stroke="#f0c9a0" stroke-opacity=".28" stroke-width=".8"/>';
+  }
+  $("#craters").innerHTML=c;
+
+
+  var real=$("#realmap"),
+      srcs=["https://commons.wikimedia.org/wiki/Special:FilePath/Mars_Viking_MDIM21_ClrMosaic_1km.jpg?width=1920",
+            "https://commons.wikimedia.org/wiki/Special:FilePath/Mars_Viking_MDIM21_ClrMosaic_1km.jpg?width=1280"];
+  (function load(i){
+    if(i>=srcs.length){return}
+    var im=new Image();
+    im.onload=function(){real.setAttribute("href",srcs[i]);real.classList.add("on")};
+    im.onerror=function(){load(i+1)};
+    im.src=srcs[i];
+  })(0);
+
+  var hs=$("#hotspots"),picks=$("#picks"),hh="",ph="";
+  ORDER.forEach(function(id){
+    var L=LOC[id],x=(L.lon<0?L.lon+360:L.lon);
+    var px=((L.lon+180)%360)/360*100, py=(90-L.lat)/180*100;
+    if(L.lon>180){px=((L.lon-360)+180)/360*100}
+    hh+='<button class="hot" data-id="'+id+'" style="left:'+px.toFixed(2)+'%;top:'+py.toFixed(2)+'%" aria-label="Open passport: '+esc(L.name)+'"><i></i><span class="lbl">'+esc(L.name)+'</span></button>';
+    ph+='<button class="pick" data-id="'+id+'" aria-pressed="false">'+(L.photo?'<span class="pk-ph"><img src="'+commons(L.photo.f,640)+'" alt="" loading="lazy" decoding="async" data-w="640" data-alt="'+esc((L.photo.alt0||[]).join("|"))+'" onerror="phNextPick(this)"></span>':'')+'<h3>'+esc(L.name)+'</h3><p>'+esc(L.pick)+'</p></button>';
+  });
+  hs.innerHTML=hh;picks.innerHTML=ph;
+  var frame=$("#mapframe"),ro=$("#readout");
+  frame.addEventListener("mousemove",function(e){
+    var r=frame.getBoundingClientRect(),fx=(e.clientX-r.left)/r.width,fy=(e.clientY-r.top)/r.height;
+    var lon=fx*360-180,lat=90-fy*180;
+    ro.textContent=Math.abs(lat).toFixed(1)+"° "+(lat>=0?"N":"S")+", "+Math.abs(lon).toFixed(1)+"° "+(lon>=0?"E":"W");
+  });
+  frame.addEventListener("mouseleave",function(){ro.textContent="Hover over the map"});
+  document.addEventListener("click",function(e){
+    var b=e.target.closest&&e.target.closest("[data-id].hot,[data-id].pick");
+    if(b){select(b.getAttribute("data-id"),true)}
+  });
+})();
+
+
+var current=null;
+$("#pp").addEventListener("error",function(e){var t=e.target;if(t&&t.tagName==="IMG"){var w=t.closest(".ph");if(w)w.classList.add("fail")}},true);
+function radar(vals){
+  var cx=150,cy=140,R=95,n=5,pts=[],rings="",lab="",ax="";
+  for(var k=1;k<=4;k++){var rr=R*k/4,rp=[];for(var i=0;i<n;i++){var a=-Math.PI/2+i*2*Math.PI/n;rp.push((cx+rr*Math.cos(a)).toFixed(1)+","+(cy+rr*Math.sin(a)).toFixed(1))}rings+='<polygon points="'+rp.join(" ")+'" fill="none" stroke="rgba(243,231,213,.16)"/>'}
+  for(var j=0;j<n;j++){
+    var a2=-Math.PI/2+j*2*Math.PI/n,v=vals[j]/10;
+    pts.push((cx+R*v*Math.cos(a2)).toFixed(1)+","+(cy+R*v*Math.sin(a2)).toFixed(1));
+    ax+='<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+R*Math.cos(a2)).toFixed(1)+'" y2="'+(cy+R*Math.sin(a2)).toFixed(1)+'" stroke="rgba(243,231,213,.16)"/>';
+    var lx=cx+(R+22)*Math.cos(a2),ly=cy+(R+22)*Math.sin(a2),an=Math.cos(a2)>.3?"start":(Math.cos(a2)<-.3?"end":"middle");
+    lab+='<text x="'+lx.toFixed(1)+'" y="'+(ly+4).toFixed(1)+'" text-anchor="'+an+'" fill="#f3e7d5" font-size="14">'+esc(AXES[j])+' '+vals[j]+'</text>';
+  }
+  return '<svg class="radar" viewBox="-95 8 490 280" role="img" aria-label="Difficulty chart: '+AXES.map(function(a,i){return a+" "+vals[i]+" of 10"}).join(", ")+'">'+rings+ax+'<polygon points="'+pts.join(" ")+'" fill="rgba(196,82,31,.45)" stroke="#e0a870" stroke-width="2"/>'+lab+'</svg>';
+}
+function commons(f,w){return "https://commons.wikimedia.org/wiki/Special:FilePath/"+encodeURIComponent(f)+(w?"?width="+w:"")}
+function phNextPick(img){
+  var l=(img.getAttribute("data-alt")||"").split("|").filter(Boolean);
+  if(l.length){var f=l.shift();img.setAttribute("data-alt",l.join("|"));img.src=commons(f,640);return}
+  img.parentNode.remove();
+}
+function phNext(img){
+  var l=(img.getAttribute("data-alt")||"").split("|").filter(Boolean);
+  if(l.length){var f=l.shift();img.setAttribute("data-alt",l.join("|"));img.src=commons(f,+img.getAttribute("data-w")||1280);return}
+  var fg=img.closest("figure");if(fg)fg.remove();
+}
+function photoFig(L){
+  var p=L.photo;if(!p)return "";
+  return '<figure class="pp-photo"><div class="ph"><img src="'+commons(p.f,1280)+'" alt="'+esc(p.alt)+'" loading="lazy" decoding="async" data-w="1280" data-alt="'+esc((p.alt0||[]).join("|"))+'" onerror="phNext(this)"></div><figcaption>'+esc(p.cap)+'</figcaption></figure>';
+}
+function select(id,scroll){
+  var L=LOC[id];current=id;
+  document.querySelectorAll(".hot,.pick").forEach(function(b){
+    var on=b.getAttribute("data-id")===id;
+    b.classList.toggle("sel",on&&b.classList.contains("hot"));
+    if(b.classList.contains("pick"))b.setAttribute("aria-pressed",on)
+  });
+  var f=L.facts.map(function(x){var kd=KIND[x.kind];return '<div class="fact"><div class="k">'+esc(x.k)+'<span class="badge '+kd[1]+'">'+kd[0]+'</span></div><div class="v">'+esc(x.v)+'</div><div class="n">'+esc(x.n)+'</div></div>'}).join("");
+  $("#pp").innerHTML=
+   '<div><div class="pp-title"><h3>'+esc(L.name)+'</h3><div class="coord num">'+esc(L.coord)+'</div></div>'+
+   photoFig(L)+
+   '<p class="pp-why">'+esc(L.why)+'</p>'+
+   '<div class="facts">'+f+'<div class="fact threat"><div class="k">Main threat</div><div class="v">'+esc(L.threat.v)+'</div><div class="n">'+esc(L.threat.n)+'</div></div></div></div>'+
+   '<aside class="pp-side"><h4>Difficulty index</h4><div class="sub">1 = easy, 10 = very hard. Project expert estimate.</div>'+radar(L.radar)+
+   '<button class="cta" id="plan" type="button">Plan an expedition here</button></aside>';
+  $("#pp-empty").style.display="none";$("#pp").classList.add("show");
+  $("#plan").addEventListener("click",function(){setLoc(id);$("#calc").scrollIntoView({behavior:"smooth"})});
+  setLoc(id,true);
+  if(scroll){$("#passport").scrollIntoView({behavior:"smooth"})}
+}
+
+
+var MH=1.02749125;
+var solWord=function(n){return n===1?"sol":"sols"};
+var S={loc:"jezero",days:3,crew:2,eva:4};
+var seg=$("#seg");
+seg.innerHTML=ORDER.map(function(id){return '<button type="button" role="radio" data-loc="'+id+'" aria-checked="false">'+esc(LOC[id].name)+'</button>'}).join("");
+seg.addEventListener("click",function(e){var b=e.target.closest("button");if(b)setLoc(b.getAttribute("data-loc"))});
+function setLoc(id,quiet){S.loc=id;calc()}
+["days","crew","eva"].forEach(function(k){$("#"+k).addEventListener("input",function(){S[k]=+this.value;calc()})});
+
+var model={};
+function calc(){
+  var L=LOC[S.loc],m=L.mods,P=S.crew,D=S.days,E=S.eva;
+  seg.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-checked",b.getAttribute("data-loc")===S.loc)});
+  
+  $("#o-days").textContent=D+" "+solWord(D);$("#o-crew").textContent=P;$("#o-eva").textContent=E+" Mars hr";
+  var o2=P*D*((24-E)*24*MH+E*45*MH*m.o2)*1.3;
+  var water=P*D*(4+E*0.5*m.water)*1.2;
+  var charges=Math.ceil(P*D*E*m.bat/8);
+  var kcal=P*D*(2500+100*E);
+  var filters=Math.ceil(P*D*E*m.bat/8)+Math.ceil(P*D/4);
+  var dose=D*m.rad;
+  model={o2:Math.round(o2),o2kg:o2/700,water:+water.toFixed(1),charges:charges,kcal:kcal,filters:filters,dose:dose,spare:P*2,rations:Math.ceil(kcal/2500)};
+  var nf=function(n){return Math.round(n).toLocaleString("en-US")};
+  var tiles=[
+   ["Oxygen",nf(model.o2),"L, incl. 30% reserve (≈ "+model.o2kg.toFixed(0)+" kg)"],
+   ["Water",nf(model.water),"L, incl. 20% reserve"],
+   ["Suit battery charges",nf(model.charges),"cycles of ≈ 8 Mars hr each"],
+   ["Food",nf(model.kcal),"kcal for the group"],
+   ["CO₂ filters",nf(model.filters),"pcs"],
+   ["Radiation dose",model.dose.toFixed(1),"mSv per mission"]
+  ];
+  $("#res").innerHTML=tiles.map(function(t){return '<div class="tile"><div class="k">'+t[0]+'</div><div class="v">'+t[1]+'</div><div class="u">'+t[2]+'</div></div>'}).join("");
+  var pct=Math.min(100,model.dose/10*100);
+  $("#dose").innerHTML='<h3 style="margin-bottom:6px">Radiation for the mission</h3><p>Personal dose ≈ <b class="num">'+model.dose.toFixed(1)+' mSv</b> ('+D+' '+solWord(D)+' × '+m.rad+' mSv/sol). Scale below: 10 mSv.</p><div class="bar" aria-hidden="true"><i style="width:'+pct+'%"></i></div><p>For comparison: a chest CT gives roughly 7–10 mSv. A mission of ≈ 490 sols (≈ 500 Earth days) including the flight is estimated at about 1000 mSv (1 Sv), so a short EVA is a small share, but it accumulates.</p>';
+  buildList();
+}
+function items(){
+  var L=LOC[S.loc],M=model,P=S.crew,out=[];
+  var nf=function(n){return Math.round(n).toLocaleString("en-US")};
+  out.push({g:"Life support",id:"o2",t:"Oxygen: "+nf(M.o2)+" L",d:"Includes a 30% reserve for unexpected delays"});
+  out.push({g:"Life support",id:"water",t:"Water: "+M.water+" L",d:"Drinking, hygiene and suit cooling"});
+  out.push({g:"Life support",id:"food",t:"Food: "+nf(M.kcal)+" kcal",d:"≈ "+M.rations+" rations of 2,500 kcal for the group"});
+  out.push({g:"Life support",id:"co2",t:"CO₂ filters: "+M.filters+" pcs",d:"For suits and the habitat module"});
+  out.push({g:"Power",id:"bat",t:"Suit battery charges: "+M.charges,d:"Each cycle ≈ 8 Mars hours of EVA"});
+  out.push({g:"Power",id:"spare",t:"Spare batteries: "+M.spare+" pcs",d:"Two per astronaut"});
+  out.push({g:"Power",id:"solar",t:"Portable solar charger",d:"For recharging away from the module"});
+  out.push({g:"Safety",id:"patch",t:"Depressurization patch kits: "+P+" sets",d:"One kit per person"});
+  out.push({g:"Safety",id:"dosi",t:"Dosimeters: "+P+" pcs",d:"One on each suit"});
+  out.push({g:"Safety",id:"beacon",t:"Emergency beacon",d:"Transmits coordinates to the module"});
+  out.push({g:"Safety",id:"radio",t:"Backup comms channel",d:"Separate from the main radio"});
+  out.push({g:"Safety",id:"med",t:"First-aid kit",d:"Including hypothermia treatment"});
+  L.extra.forEach(function(x){out.push({g:"Site-specific: "+L.name,id:x.id,t:x.t,d:x.d})});
+  return out;
+}
+var checked={};
+function buildList(){
+  var key="mars-check-"+S.loc;checked=ls.get(key)||{};
+  var it=items(),groups={},order=[];
+  it.forEach(function(x){if(!groups[x.g]){groups[x.g]=[];order.push(x.g)}groups[x.g].push(x)});
+  $("#list").innerHTML=order.map(function(g){
+    return '<div class="grp"><h4>'+esc(g)+'</h4>'+groups[g].map(function(x){
+      return '<label class="item"><input type="checkbox" data-id="'+x.id+'"'+(checked[x.id]?" checked":"")+'><span>'+esc(x.t)+'<small>'+esc(x.d)+'</small></span></label>'}).join("")+'</div>'}).join("");
+  progress();
+}
+$("#list").addEventListener("change",function(e){
+  var i=e.target;if(i.type!=="checkbox")return;
+  checked[i.getAttribute("data-id")]=i.checked;ls.set("mars-check-"+S.loc,checked);progress();
+});
+function progress(){
+  var all=document.querySelectorAll("#list input"),done=0;all.forEach(function(i){if(i.checked)done++});
+  var pct=all.length?Math.round(done/all.length*100):0;
+  $("#pfill").style.width=pct+"%";$("#pbar").setAttribute("aria-valuenow",pct);
+  $("#ptxt").textContent=done+" of "+all.length;
+  var st=$("#pstat"),go=done===all.length&&all.length>0;
+  st.textContent=go?"READY FOR EVA":(done?"CHECKING":"STANDBY");st.classList.toggle("go",go);
+}
+$("#reset").addEventListener("click",function(){checked={};ls.set("mars-check-"+S.loc,checked);buildList()});
+$("#print").addEventListener("click",function(){window.print()});
+$("#copy").addEventListener("click",function(){
+  var L=LOC[S.loc],txt="Expedition: "+L.name+", "+S.days+" "+solWord(S.days)+", "+S.crew+" astronaut(s), EVA "+S.eva+" Mars hr/sol\n";
+  var g="";
+  items().forEach(function(x){if(x.g!==g){g=x.g;txt+="\n"+g+"\n"}txt+=(checked[x.id]?"[x] ":"[ ] ")+x.t+(x.d?" — "+x.d:"")+"\n"});
+  var b=$("#copy");
+  function ok(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy list"},1600)}
+  try{navigator.clipboard.writeText(txt).then(ok,function(){fb()})}catch(e){fb()}
+  function fb(){var t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand("copy");ok()}catch(e){b.textContent="Copy failed"}t.remove()}
+});
+
+
+var PRO=[
+ {id:"breach",sev:"Critical",tab:"Suit depressurization",lead:"Suit pressure is dropping: the helmet hisses, the display shows a red alert, or you hear a leak.",
+  steps:[
+   ["Stop and report","Say \"Depressurization\" over the radio and give your position. Your partner must know what happened."],
+   ["Seal the leak and add oxygen","Press your hand over the leak, apply a patch from the suit kit, switch on the emergency oxygen supply."],
+   ["Head to the airlock with your partner","Take the shortest safe route, leaning on your partner. Don't run: it increases oxygen use."]],
+  donts:["Don't remove your helmet until you are in the module at normal pressure.","Don't hide the problem to \"finish the route\".","Don't leave your partner alone."]},
+ {id:"comms",sev:"Serious",tab:"Comms failure",lead:"The radio is silent: the module doesn't answer, your partner can't be heard.",
+  steps:[
+   ["Check your own equipment","Volume, channel, power cable. Try the backup channel and repeat the call three times."],
+   ["Stop and signal","Raise your hands, switch on the emergency beacon and flashlight. Show your partner with gestures: \"comms lost, going back\"."],
+   ["Return along your route","Follow the same path back to the module or a relay. If you don't know the way, stay put and wait for the search team."]],
+  donts:["Don't head into new unknown terrain looking for a signal.","Don't move farther from your partner than you can see them.","Don't spend oxygen on long attempts once it's time to return."]},
+ {id:"storm",sev:"Serious",tab:"Dust storm",lead:"The sky darkens, visibility drops, instruments show rising dust and wind.",
+  steps:[
+   ["Stop work and gather","Secure tools, contact the module, gather the group in one place."],
+   ["Return to shelter","If the module is closer than your battery charge allows, go there. Hold the safety tether."],
+   ["Clean suits and wait","In the airlock, wash off dust, check connections, charge batteries. Don't go out until visibility and wind improve."]],
+  donts:["Don't walk blind after losing landmarks: stop and wait.","Don't open the airlock without brushing dust off the suit.","Don't rely on solar panels alone: they barely charge during a storm."]},
+ {id:"flare",sev:"Critical",tab:"Radiation flare",lead:"The dosimeter shows a sharp rise: a solar particle event is possible.",
+  steps:[
+   ["Stop the EVA","Say \"Radiation\" and return to the module without delay."],
+   ["Move to the best-shielded room","Where the most material lies between you and the outside: water stores, soil, walls."],
+   ["Watch the dosimeter","Stay until readings return to normal. Record the dose received in the log."]],
+  donts:["Don't go out \"for a minute\".","Don't take off your dosimeter.","Don't use this time for an EVA while the dosimeter is still above normal."]},
+ {id:"fire",tab:"Habitat fire",sev:"Critical",lead:"Smoke, a burning smell, the alarm is sounding.",
+  steps:[["Shout \"Fire\" and cut the power","Switch off equipment in the fire zone if it's safe, and warn everyone."],
+   ["Put on masks and evacuate","Smoke is toxic: mask or helmet, stay low, move the injured out first."],
+   ["Fight it with a CO₂ extinguisher","Aim at the base of the flames. Don't use water on electrical equipment."],
+   ["Check air and integrity","Once it's out, ventilate, check oxygen and CO₂ levels, inspect the walls for damage."]],
+  donts:["Don't open a door if there is heavy fire and pressure behind it.","Don't douse electronics with water.","Don't go back for belongings."]},
+ {id:"air",tab:"Bad air (CO₂)",sev:"Serious",lead:"Headache, dizziness, fast breathing, the CO₂ sensor alarm.",
+  steps:[["Stop physical exertion","Sit down and breathe slowly: CO₂ then builds up more slowly."],
+   ["Check the CO₂ scrubbers","Replace the cartridges, switch on the backup purification system."],
+   ["Move to a clean compartment","Go to a compartment with normal readings and close the hatch between compartments."],
+   ["Connect oxygen","Supply oxygen from the suits or the emergency reserve until the system is repaired."]],
+  donts:["Don't wait until you feel severe weakness.","Don't make sudden movements if you feel dizzy."]},
+ {id:"power",tab:"Power loss",sev:"Serious",lead:"The lights went out, systems switched to backup battery.",
+  steps:[["Turn on emergency lighting and comms","Notify everyone. Check that oxygen and comms are working."],
+   ["Shut off everything non-essential","Lab equipment, zone heaters, chargers. Keep only air and comms."],
+   ["Find the cause","Check the solar panels (dust), cables, fuses and battery temperature."],
+   ["Prepare the suits","If power can't be restored quickly, move the group to the warmest compartment."]],
+  donts:["Don't switch everything on at once after power returns.","Don't go outside to repair without a partner."]},
+ {id:"injury",tab:"Injury or fainting",sev:"Critical",lead:"A person has fallen, is hurt, or isn't responding.",
+  steps:[["Assess safety and call","Check there is no further danger. Notify the base and the group leader."],
+   ["Check breathing and consciousness","If breathing, place them on their side. If not, begin resuscitation."],
+   ["Stop the bleeding","With a pressure bandage or tourniquet. Seal any suit damage."],
+   ["Transport to the module","Two carry, one monitors oxygen and comms. Hand over to the medic."]],
+  donts:["Don't move a person with a suspected spine injury unless necessary.","Don't remove the helmet until in the airlock."]},
+ {id:"lost",tab:"Lost orientation",sev:"Serious",lead:"You can't see the module, the GPS beacon isn't responding, the wind changed.",
+  steps:[["Stop and don't go anywhere","Every blind step increases oxygen use and the distance from the module."],
+   ["Turn on the beacon and flashlight","Send a distress call over the radio every 2 minutes."],
+   ["Note landmarks","The sun, slopes, your own tracks. Retrace your path to the last known location."],
+   ["Reduce oxygen use","Sit down, breathe slowly, switch the suit to economy mode."]],
+  donts:["Don't walk deeper into unknown terrain.","Don't separate from your partner."]}
+];
+var cur=0,ovStep=0,done={};
+var tabs=$("#tabs");
+tabs.innerHTML=PRO.map(function(p,i){return '<button type="button" role="tab" id="t'+i+'" data-i="'+i+'" aria-selected="'+(i===0)+'">'+esc(p.tab)+'</button>'}).join("");
+tabs.addEventListener("click",function(e){var b=e.target.closest("button");if(b){cur=+b.getAttribute("data-i");tabs.querySelectorAll("button").forEach(function(x){x.setAttribute("aria-selected",x===b)});renderP()}});
+function pcount(){var p=PRO[cur],n=0;p.steps.forEach(function(_,i){if(done[p.id][i])n++});return n}
+function renderP(){
+  var p=PRO[cur];done[p.id]=done[p.id]||{};var n=pcount(),t=p.steps.length;
+  $("#pbody").setAttribute("aria-labelledby","t"+cur);
+  $("#pbody").innerHTML='<div class="rule">STOP — BREATHE — REPORT — ACT<small>First stop and calm your breathing, then notify your partner and base, and only then follow the steps.</small></div>'+
+   '<div class="p-head"><div><span class="sev">'+esc(p.sev||"")+'</span><h3>'+esc(p.tab)+'</h3><p>'+esc(p.lead)+'</p></div><button class="cta" id="alarm" type="button">Alarm mode</button></div>'+
+   '<div class="pbar"><span class="num" id="pcnt">Done '+n+' of '+t+'</span><div class="bar"><i id="pfill" style="width:'+(n/t*100)+'%"></i></div><button class="cta ghost" id="preset" type="button">Reset</button></div>'+
+   '<ol class="steps">'+p.steps.map(function(s,i){return '<li tabindex="0" role="checkbox" aria-checked="'+(!!done[p.id][i])+'" data-s="'+i+'"'+(done[p.id][i]?' class="done"':'')+'><div><b>'+esc(s[0])+'</b><span>'+esc(s[1])+'</span></div></li>'}).join("")+'</ol>'+
+   '<div class="donts"><h4>What not to do</h4><ul>'+p.donts.map(function(d){return '<li>'+esc(d)+'</li>'}).join("")+'</ul></div>';
+  $("#alarm").addEventListener("click",function(){openOv(0)});
+  $("#preset").addEventListener("click",function(){done[p.id]={};renderP()});
+}
+$("#pbody").addEventListener("click",function(e){var li=e.target.closest("li[data-s]");if(li)toggleStep(li)});
+$("#pbody").addEventListener("keydown",function(e){var li=e.target.closest&&e.target.closest("li[data-s]");if(li&&(e.key===" "||e.key==="Enter")){e.preventDefault();toggleStep(li)}});
+function toggleStep(li){var p=PRO[cur],i=li.getAttribute("data-s");done[p.id][i]=!done[p.id][i];li.classList.toggle("done",!!done[p.id][i]);li.setAttribute("aria-checked",!!done[p.id][i]);var n=pcount();$("#pcnt").textContent="Done "+n+" of "+p.steps.length;$("#pfill").style.width=(n/p.steps.length*100)+"%"}
+
+var ov=$("#ov");
+var ovT0=0,ovTm=null;
+function openOv(i){ovT0=Date.now();clearInterval(ovTm);ovTm=setInterval(function(){var d=Math.floor((Date.now()-ovT0)/1000);$("#ov-el").textContent="Elapsed "+String(Math.floor(d/60)).padStart(2,"0")+":"+String(d%60).padStart(2,"0")},1000);ovStep=i;ov.classList.add("open");drawOv();$("#ov-next").focus()}
+function closeOv(){clearInterval(ovTm);ov.classList.remove("open");var a=$("#alarm");if(a)a.focus()}
+function drawOv(){
+  var p=PRO[cur],s=p.steps[ovStep],last=ovStep===p.steps.length-1;
+  $("#ov-t").textContent=p.tab;$("#ov-n").textContent=ovStep+1;$("#ov-h").textContent=s[0];$("#ov-p").textContent=s[1];
+  $("#ov-d").textContent="Step "+(ovStep+1)+" of "+p.steps.length;
+  $("#ov-next").textContent=last?"Finish":"Done, next";
+  $("#ov-prev").style.visibility=ovStep?"visible":"hidden";
+}
+$("#ov-next").addEventListener("click",function(){var p=PRO[cur];done[p.id]=done[p.id]||{};done[p.id][ovStep]=true;if(ovStep>=p.steps.length-1){closeOv();renderP()}else{ovStep++;drawOv()}});
+$("#ov-prev").addEventListener("click",function(){if(ovStep>0){ovStep--;drawOv()}});
+$("#ov-x").addEventListener("click",function(){closeOv();renderP()});
+document.addEventListener("keydown",function(e){
+  if(!ov.classList.contains("open"))return;
+  if(e.key==="Escape"){closeOv();renderP()}
+  else if(e.key==="ArrowRight")$("#ov-next").click();
+  else if(e.key==="ArrowLeft")$("#ov-prev").click();
+  else if(e.key==="Tab"){var f=ov.querySelectorAll("button:not([style*='hidden'])"),a=f[0],b=f[f.length-1];if(e.shiftKey&&document.activeElement===a){e.preventDefault();b.focus()}else if(!e.shiftKey&&document.activeElement===b){e.preventDefault();a.focus()}}
+});
+
+
+renderP();calc();
+})();
+</script>
+</body>
+</html>
